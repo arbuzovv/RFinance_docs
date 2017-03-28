@@ -24,8 +24,10 @@
 
 #getDividends
 library(quantmod)
+library(PerformanceAnalytics)
 library(data.table)
 library(scales)
+library(xts)
 
 stock_names <- read.csv('https://raw.githubusercontent.com/arbuzovv/RFinance_docs/master/RFinance2017/stock_list_1850.txt',stringsAsFactors = FALSE)
 
@@ -62,16 +64,38 @@ for(i in 1433:length(stock_names[,1]))
   print(c(i,stock_names[i,1]))
 }
 
-
+#Figure 1. Distribution of dividend yield
 rel_div <- merge(dividens_list,stock_price_list,by = c('Symbol','Date'),all.x = TRUE)
 rel_div$dividend_yield <- 100*rel_div$Dividend/rel_div$Open
 hist(rel_div$dividend_yield,breaks = 400000,xlim=c(0,4),xlab='Dividend yield',main='')
 
+# Figure 2. Scatterplot of dividend yield and night ex-dividend return
 stock_price_list <- data.table(stock_price_list)
 night_gaps <- data.frame(stock_price_list[,list(Date[2:length(Date)],NightGap = Open[2:(length(Open))]/Close[1:length(Close)]-1),by='Symbol'])
 names(night_gaps)[2] <- 'Date'
-
 div_returns <- merge(rel_div,night_gaps,by = c('Symbol','Date'),all.x = TRUE)
-plot(div_returns$dividend_yield,100*div_returns$NightGap,xlim = c(0,4),ylim=c(-3,3),ylab = 'Night gap return, %',xlab = 'Dividend yield, %',cex=.2,col=alpha('darkgreen',0.4))
+plot(div_returns$dividend_yield,100*div_returns$NightGap,xlim = c(0,4),ylim=c(-3,3),ylab = 'Night gap return, %',xlab = 'Dividend yield, %',cex=.1,col=alpha('darkgreen',0.2))
 grid()
+
+#clean data
+performance <- div_returns[div_returns$dividend_yield < 10,]
+performance <- performance[performance$dividend_yield > 0,]
+performance <- performance[performance$NightGap < 0.5,]
+performance <- performance[performance$NightGap > -0.5,]
+performance <- performance[performance$Date > as.Date('2012-01-01'),]
+performance$day_pnl <- performance$dividend_yield/100+performance$NightGap
+
+#pnl distribution
+hist(performance$day_pnl,breaks = 1000,xlim=c(-0.07,0.07))
+
+#calc performance
+strategy_pnl <- aggregate(performance$day_pnl,by=list(performance$Date),mean)
+names(strategy_pnl) <-  c('Date','PnL')
+strategy_pnl <- xts(strategy_pnl$PnL,order.by = strategy_pnl$Date)
+
+#commission
+strategy_pnl <- strategy_pnl - 6/10000
+par(mfrow=c(2,1))
+chart.CumReturns(strategy_pnl ,main=SharpeRatio.annualized(strategy_pnl),geometric = F,wealth.index = F)
+chart.Drawdown(strategy_pnl,main="Drawdown from Peak Equity Attained",geometric = F)
 
