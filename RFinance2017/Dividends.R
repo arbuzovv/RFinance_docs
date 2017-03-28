@@ -18,13 +18,16 @@
 
 
 #############################################################################
-# Estimation of LPPL model for Russian market
+# Dividend_strategy - towards to the efficient market
 # R/Finance 2017
 ###############################################################################
 
 #getDividends
 library(quantmod)
-stock_names <- read.table('D:/user_file/Arbuzov/stock_list_1850.txt',stringsAsFactors = FALSE)
+library(data.table)
+library(scales)
+
+stock_names <- read.csv('https://raw.githubusercontent.com/arbuzovv/RFinance_docs/master/RFinance2017/stock_list_1850.txt',stringsAsFactors = FALSE)
 
 #try to donwload dividends data, it needs few minutes for execution
 for(i in 1:length(stock_names[,1]))
@@ -58,4 +61,17 @@ for(i in 1433:length(stock_names[,1]))
   }
   print(c(i,stock_names[i,1]))
 }
+
+
+rel_div <- merge(dividens_list,stock_price_list,by = c('Symbol','Date'),all.x = TRUE)
+rel_div$dividend_yield <- 100*rel_div$Dividend/rel_div$Open
+hist(rel_div$dividend_yield,breaks = 400000,xlim=c(0,4),xlab='Dividend yield',main='')
+
+stock_price_list <- data.table(stock_price_list)
+night_gaps <- data.frame(stock_price_list[,list(Date[2:length(Date)],NightGap = Open[2:(length(Open))]/Close[1:length(Close)]-1),by='Symbol'])
+names(night_gaps)[2] <- 'Date'
+
+div_returns <- merge(rel_div,night_gaps,by = c('Symbol','Date'),all.x = TRUE)
+plot(div_returns$dividend_yield,100*div_returns$NightGap,xlim = c(0,4),ylim=c(-3,3),ylab = 'Night gap return, %',xlab = 'Dividend yield, %',cex=.2,col=alpha('darkgreen',0.4))
+grid()
 
